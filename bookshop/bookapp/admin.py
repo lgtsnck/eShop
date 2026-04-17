@@ -5,7 +5,8 @@ from django.utils.safestring import mark_safe
 
 from .models import *
 
-
+# Блок BookAdminForm закомментирован, но логика в нем была направлена на
+# валидацию размеров и разрешения загружаемых обложек книг.
 # class BookAdminForm(ModelForm):
 #
 #     def __init__(self, *args, **kwargs):
@@ -31,41 +32,62 @@ from .models import *
 
 
 class OfficeSupplyAdminForm(ModelForm):
-
+    """
+    Кастомная форма для управления канцтоварами в админке.
+    """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         instance = kwargs.get('instance')
-        if not instance.manufacturer:
+        # Если у объекта еще не выбран производитель, делаем поле с именем производителя
+        # доступным только для чтения и визуально "серым".
+        if not instance or not instance.manufacturer:
             self.fields['manufacturer_name'].widget.attrs.update({
                 'readonly': True, 'style': 'background: gray;'
             })
 
     def clean(self):
-        if not self.cleaned_data['manufacturer']:
+        """
+        Метод проверки данных: если производитель (ForeignKey) не выбран,
+        принудительно очищаем строковое поле имени производителя.
+        """
+        if not self.cleaned_data.get('manufacturer'):
             self.cleaned_data['manufacturer_name'] = None
         return self.cleaned_data
 
 
 class BookAdmin(admin.ModelAdmin):
-    # form = BookAdminForm
-
+    """
+    Настройка отображения книг в панели администратора.
+    """
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Переопределяем выбор категории: при создании книги в списке
+        будут только категории со слагом 'books'.
+        """
         if db_field.name == 'category':
             return ModelChoiceField(Category.objects.filter(slug='books'))
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
 class OfficeSupplyAdmin(admin.ModelAdmin):
-
+    """
+    Настройка отображения канцтоваров.
+    """
+    # Используем кастомный HTML-шаблон для формы редактирования
     change_form_template = 'admin.html'
+    # Подключаем созданную выше форму с логикой readonly-полей
     form = OfficeSupplyAdminForm
 
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """
+        Для канцтоваров ограничиваем выбор категорий только слагом 'office-supply'.
+        """
         if db_field.name == 'category':
             return ModelChoiceField(Category.objects.filter(slug='office-supply'))
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
 
+# Регистрация всех моделей в админ-панели
 admin.site.register(Category)
 admin.site.register(Book, BookAdmin)
 admin.site.register(OfficeSupply, OfficeSupplyAdmin)
